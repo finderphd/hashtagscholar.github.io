@@ -84,13 +84,8 @@ document.addEventListener("DOMContentLoaded", () => {
   async function updateVisitorCount() {
     visitorCountEl.textContent = "...";
 
-    try {
-      // 1️⃣ Get or create a unique ID for this browser
-      let browserId = localStorage.getItem("browser_id");
-      if (!browserId) {
-        browserId = crypto.randomUUID();
-        localStorage.setItem("browser_id", browserId);
-      }
+// 1️⃣ TEST MODE: generate a new visitor ID every refresh
+let browserId = crypto.randomUUID();
 
       const visitorKey = `visitor-${browserId}`;
 
