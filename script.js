@@ -71,18 +71,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const visitorCountEl = document.getElementById("visitorCount");
   if (!visitorCountEl) return;
 
-  const API_BASE = "https://api.countapi.xyz";
+  const API_BASE = "https://api.counterapi.dev/v1";
   const NAMESPACE = "hashtagscholars";
   const TOTAL_KEY = "unique-visitors-total";
 
   async function callAPI(path) {
-    const res = await fetch(`${API_BASE}${path}`, {
-      method: "GET",
-      cache: "no-store"
-    });
-
+    const res = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
     if (!res.ok) throw new Error("API failed");
-
     return res.json();
   }
 
@@ -90,8 +85,8 @@ document.addEventListener("DOMContentLoaded", () => {
     visitorCountEl.textContent = "...";
 
     try {
+      // 1️⃣ Get or create a unique ID for this browser
       let browserId = localStorage.getItem("browser_id");
-
       if (!browserId) {
         browserId = crypto.randomUUID();
         localStorage.setItem("browser_id", browserId);
@@ -99,28 +94,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const visitorKey = `visitor-${browserId}`;
 
-      // 1️⃣ Increment visitor-specific key
-      const visitorRes = await callAPI(
-        `/hit/${NAMESPACE}/${visitorKey}`
-      );
+      // 2️⃣ Increment visitor-specific key
+      await callAPI(`/${NAMESPACE}/${visitorKey}/up`);
 
-      const visitorResData = await callAPI(`/get/${NAMESPACE}/${visitorKey}`);
-      const visitorCount = Number(visitorResData.value || 0);
+      // 3️⃣ Get visitor key count
+      const visitorRes = await callAPI(`/${NAMESPACE}/${visitorKey}`);
+      const visitorCount = Number(visitorRes?.count || 0);
 
-
-      // 2️⃣ If this browser's count is 1 → first visit ever
+      // 4️⃣ If first visit, increment total unique visitors
       if (visitorCount === 1) {
-        await callAPI(
-          `/hit/${NAMESPACE}/${TOTAL_KEY}`
-        );
+        await callAPI(`/${NAMESPACE}/${TOTAL_KEY}/up`);
       }
 
-      // 3️⃣ Get total unique visitors
-      const totalRes = await callAPI(
-        `/get/${NAMESPACE}/${TOTAL_KEY}`
-      );
+      // 5️⃣ Get total unique visitors
+      const totalRes = await callAPI(`/${NAMESPACE}/${TOTAL_KEY}`);
+      visitorCountEl.textContent = totalRes?.count || 1;
 
-      visitorCountEl.textContent = totalRes.value || 1;
+      // 6️⃣ Cache locally
+      localStorage.setItem("cachedVisitorCount", totalRes?.count || 1);
 
     } catch (err) {
       console.error("Visitor counter error:", err);
