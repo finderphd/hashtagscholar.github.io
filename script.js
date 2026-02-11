@@ -76,8 +76,8 @@ document.addEventListener("DOMContentLoaded", () => {
   // Count unique visitors globally using CountAPI:
   // - One marker key per browser fingerprint
   // - One shared total counter key
-  const COUNT_API_BASE = "https://api.countapi.xyz";
-  const NAMESPACE = "hashtagscholars-github-io";
+  const COUNT_API_BASE = "https://api.counterapi.dev/v1";
+  const NAMESPACE = "hashtagscholars";
   const TOTAL_KEY = "unique-visitors-total";
 
   async function countApi(path) {
@@ -86,17 +86,9 @@ document.addEventListener("DOMContentLoaded", () => {
       cache: "no-store"
     });
     if (!response.ok) {
-      throw new Error(`CountAPI request failed: ${response.status}`);
+      throw new Error(`Counter API request failed: ${response.status}`);
     }
     return response.json();
-  }
-
-  async function hashFingerprint(input) {
-    const bytes = new TextEncoder().encode(input);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", bytes);
-    return Array.from(new Uint8Array(hashBuffer))
-      .map((byte) => byte.toString(16).padStart(2, "0"))
-      .join("");
   }
 
   async function getVisitorToken() {
@@ -105,15 +97,9 @@ document.addEventListener("DOMContentLoaded", () => {
       return existing;
     }
 
-    const fingerprint = [
-      navigator.userAgent || "ua",
-      navigator.language || "lang",
-      navigator.platform || "platform",
-      Intl.DateTimeFormat().resolvedOptions().timeZone || "tz",
-      `${screen.width}x${screen.height}x${screen.colorDepth}`
-    ].join("|");
-
-    const token = await hashFingerprint(fingerprint);
+    const token = (window.crypto && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `v-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     localStorage.setItem("visitorToken", token);
     return token;
   }
@@ -121,28 +107,31 @@ document.addEventListener("DOMContentLoaded", () => {
   async function updateUniqueVisitorCount() {
     visitorCountEl.textContent = "...";
 
-    const token = await getVisitorToken();
-    const visitorKey = `seen-${token}`;
-    const visitorKeyPath = `/${encodeURIComponent(NAMESPACE)}/${encodeURIComponent(visitorKey)}`;
-    const totalKeyPath = `/${encodeURIComponent(NAMESPACE)}/${encodeURIComponent(TOTAL_KEY)}`;
-
     try {
-      const seenResponse = await countApi(`/get${visitorKeyPath}`);
-      const hasSeen = Number.isFinite(seenResponse?.value) && seenResponse.value > 0;
+      const token = await getVisitorToken();
+      const visitorKey = `seen-${token}`;
+      const visitorKeyPath = `/${encodeURIComponent(NAMESPACE)}/${encodeURIComponent(visitorKey)}`;
+      const totalKeyPath = `/${encodeURIComponent(NAMESPACE)}/${encodeURIComponent(TOTAL_KEY)}`;
 
-      if (!hasSeen) {
-        // Mark this browser once, then increment global total once.
-        await countApi(`/hit${visitorKeyPath}`);
-        const totalResult = await countApi(`/hit${totalKeyPath}`);
-        visitorCountEl.textContent = String(totalResult?.value ?? 1);
+      // Increment per-visitor marker every load; first load will produce count=1.
+      const seenResponse = await countApi(`${visitorKeyPath}/up`);
+      const seenCount = Number(seenResponse?.count || 0);
+
+      if (seenCount === 1) {
+        const totalResult = await countApi(`${totalKeyPath}/up`);
+        const totalCount = Number(totalResult?.count || 1);
+        visitorCountEl.textContent = String(totalCount);
+        localStorage.setItem("cachedVisitorCount", String(totalCount));
         return;
       }
 
-      const totalResult = await countApi(`/get${totalKeyPath}`);
-      visitorCountEl.textContent = String(totalResult?.value ?? 0);
+      const totalResult = await countApi(totalKeyPath);
+      const totalCount = Number(totalResult?.count || 0);
+      visitorCountEl.textContent = String(totalCount);
+      localStorage.setItem("cachedVisitorCount", String(totalCount));
     } catch (error) {
       console.error("Visitor counter failed:", error);
-      visitorCountEl.textContent = "-";
+      visitorCountEl.textContent = localStorage.getItem("cachedVisitorCount") || "0";
     }
   }
 
